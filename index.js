@@ -1,105 +1,174 @@
 const mysql = require('mysql');
 const inquirer = require('inquirer');
-
-let done = false;
+const ctable = require('console.table');
 
 const connection = mysql.createConnection({
     host: 'localhost',
     port: 3306,
     user: 'root',
-    password: 'Brulee98',
-    database: 'employee_mgmtDB'
+    password: 'password',
+    database: 'employee_mgmtdb'
 });
 
+
+
+
+
 const addRow = (table, data) => {
-    connection.query('insert into ? set ?', [table, data], e => {
+    connection.query(`insert into ${table} set ?`, data, e => {
         if(e) throw e;
         console.log(`Row inserted into table ${table}.`);
+        inqMain();
     })
 }
 
+
+
+
+
 const viewTable = (table) => {
-    connection.query(`select * from ${table}`, (e, res) => {
+    let viewQuery = `select * from ${table}`;
+    if(table === 'role'){
+        viewQuery = `select role.id, role.title, role.salary, department.name as 'department' from role left join department on role.department_id = department.id`
+    }else
+    if(table === 'employee'){
+        viewQuery = `select employee.id, employee.first_name as 'name', employee.last_name as 'surname', role.title as 'role', employee.manager_id as 'manager' from employee left join (department, role) on (role.department_id = department.id and employee.role_id = role.id)`
+    }
+    return connection.query(viewQuery, (e, res) => {
         if(e) throw e;
-        console.log(res);
+        console.table(res);
+        inqMain();
     });
 }
 
-const updateEmployee = (employeeID, field, data) => {
-    connection.query('update employee set ? where id = ?', [{[field]:data}, employeeID])
+
+
+
+
+const updateEmployee = (employeeID, data) => {
+    connection.query(`update employee set ? where id = ${employeeID}`, data, (e,res) => {
+        if(e) throw e;
+        connection.query(`select * from employee where id = ${employeeID}`, (e, result) => {
+            console.table(result);
+            inqMain();
+        })
+    })
 }
+
+
+
+
 
 const addHandler = (res) => {
-switch(res.choice){
-case 'Department':
-inquirer.prompt([
-{
-    message: 'Department Name?',
-    type: 'input',
-    name: 'name'
-}
-]).then(res => {
-    addRow('department', res);
-});
-break;
-case 'Role':
-inquirer.prompt([
-{
-    message: 'Role Title?',
-    type: 'input',
-    name: 'title'
-},{
-    message: 'Role Salary?',
-    type: 'number',
-    name: 'salary'
-},{
-    message: 'Department ID/Name?',
-    type: 'input',
-    name: 'department_'
-}
-]).then(res => {
-    if(!isNaN(res['department_'] * 1)){
-        res['department_id'] = res['department_'] * 1;
-        console.log(res)
-        delete res['department_'];
-        console.log(res);
-        addRow('role', res);
-    }else{
-        try {
-            connection.query('select * from department where name = "' + res['department_'] + '"', (e, data) => {
-                if(e) throw e;
-                console.log(res)
-                res['department_id'] = data[0].id;
-                delete res['department_'];
-                console.log(res)
-                addRow('role', res);
-            })
-        } catch (error) {
-            console.log(error);
+    switch(res.choice){
+    case 'Department':
+        inquirer.prompt([
+        {
+            message: 'Department Name?',
+            type: 'input',
+            name: 'name'
         }
+        ]).then(res => {
+            console.log(res);
+            addRow('department', res);
+        });
+    break;
+    /** ------------------- */
+    case 'Role':
+        inquirer.prompt([
+        {
+            message: 'Role Title?',
+            type: 'input',
+            name: 'title'
+        },{
+            message: 'Role Salary?',
+            type: 'number',
+            name: 'salary'
+        },{
+            message: 'Department ID?',
+            type: 'number',
+            name: 'department_id'
+        }
+        ]).then(res => {
+            console.log(res);
+            addRow('role', res);
+        })
+    break;
+    /** ------------------- */
+    case 'Employee':
+        inquirer.prompt([
+            {
+                name: 'first_name',
+                message: 'Employee First Name?',
+                type: 'input'
+            },{
+                name: 'last_name',
+                message: 'Employee Last Name?',
+                type: 'input'
+            },{
+                name: 'role_id',
+                type: 'number',
+                message: 'Role ID?'
+            },{
+                name: 'manager_id',
+                type: 'number',
+                message: 'Manager ID?'
+            }
+        ]).then(res => {
+            console.log(res);
+            addRow('employee', res);
+        })
+    break;
     }
-})
-break;
-case 'Employee':
+}
 
-break;
-}
-}
+
+
+
 const viewHandler = (res) => {
-switch(res.choice){
-case 'Departments':
-
-break;
-case 'Roles':
-
-break;
-case 'Employees':
-
-break;
+    switch(res.choice){
+    case 'Departments':
+        viewTable('department');
+    break;
+    /** ------------------- */
+    case 'Roles':
+        viewTable('role')
+    break;
+    /** ------------------- */
+    case 'Employees':
+        viewTable('employee')
+    break;
+    }
 }
-}
+
+
+
+
+
 const updateHandler = (res) => {
-
+    switch (res.choice) {
+    case 'Employee': 
+        inquirer.prompt([
+            {
+                message: 'ID of Employee?',
+                name: 'id',
+                type: 'number'
+            },{
+                message: 'New Role ID',
+                name: 'role_id',
+                type: 'number'
+            },{
+                message: 'New Manager ID',
+                name: 'manager_id',
+                type: 'number'
+            }
+        ]).then(res => {
+            const id = res.id;
+            delete res.id;
+            updateEmployee(id, res)
+        })
+    break;
+    }
 }
 
 const inqMain = () => {
@@ -120,7 +189,7 @@ const inqMain = () => {
             choices: ['Department', 'Role', 'Employee']
         }]).then(input => {
             addHandler(input);
-        }).then(out => console.log(out??"Data written."))
+        }).then(out =>{})
     break;
 /** ------------------- */
     case 'View':
@@ -131,7 +200,7 @@ const inqMain = () => {
             choices: ['Departments', 'Roles', 'Employees']
         }]).then(input => {
             viewHandler(input);
-        }).then(out => console.log(out))
+        }).then(out => {})
     break;
 /** ------------------- */
     case 'Update':
@@ -142,7 +211,7 @@ const inqMain = () => {
             choices: ['Employee']
         }]).then(input => {
             updateHandler(input);
-        }).then(out => console.log(out))
+        }).then(out => {})
     break;
 /** ------------------- */
     default:
@@ -151,3 +220,8 @@ const inqMain = () => {
     }
     })
 }
+
+connection.connect((err) => {
+    if(err) throw err;
+    inqMain();
+})
